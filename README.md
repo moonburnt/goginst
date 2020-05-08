@@ -9,9 +9,9 @@ Just throw this script somewhere, edit content of "script's settings" category o
 **Dependencies**:
 - coreutils
 - bash
-- unzip
-- innoextract
-- [gogextract](https://github.com/Yepoleb/gogextract)
+- unzip (to unpack .zip files, located inside .sh installers)
+- innoextract (to unpack .exe installers)
+- [gogextract](https://github.com/Yepoleb/gogextract) (to unpack .sh installers)
 - gio (optionally for "gio trash". Can be altered to "rm -f" or whatever you want)
 
 **Notes a.k.a "before you complain"**:
