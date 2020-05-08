@@ -28,11 +28,11 @@ else
 fi
 
 #checking if our $slug directory contain .sh files that match out $slug mask
-#shells=($(ls -A $slug*.sh))
-shells=($(ls -A ./$slug/$slug*.sh))
-#echo ${shells[@]}
-if [ -n $({$shells[@]} 2>/dev/null) ]; then
-	echo "Found valid .sh's, proceed"
+#gameinstallers=($(ls ./$slug/$slug*.sh))
+gameinstallers=($(ls ./$slug/*.sh)) #removed check for slugs, coz some games (like dont starve) have installer names that dont match game's slug
+#if lengh of gameinstallers array is not 0 - proceed
+if ! [ ${#gameinstallers[@]} -eq 0 ]; then
+	echo "Found linux installers, proceed"
 else
 	echo "No valid files has been found, abort"
 	exit 1
@@ -60,7 +60,7 @@ if [ -f $tempdir/$slug ] || [ -d $tempdir/$slug ] || [ -L $tempdir/$slug ]; then
 fi
 
 #unpacking valid .sh files into temporary directory
-for workfile in "${shells[@]}"; do
+for workfile in "${gameinstallers[@]}"; do
 	echo $workfile
 	$extractor $workfile $tempdir/$slug
 	unzip $tempdir/$slug/data.zip data/noarch/* -d $tempdir/$slug
@@ -89,8 +89,9 @@ else
 fi
 
 #moving unpacked files into $gamedir
-#mv $tempdir/$slug/data/noarch $gamedir
-cp -a $tempdir/$slug/data/noarch/* $gamedir #Iirc (I dont remember why I changed this, lol), this way (unlike with "mv") it will preserve attributes of files (if they are executable and such) and probably overwrite files that already exists. Which is what we usually want, coz $gamedir may contain custom launcher, game's saves and other stuff, created after initial installation - attempts to remove it completely (in case we are updating already installed game) will wipe these out.
+echo "Moving game files into" $gamedir "directory"
+#mv $tempdir/$slug/data/noarch/* $gamedir
+cp -a $tempdir/$slug/data/noarch/* $gamedir #This way (unlike with "mv") it will preserve attributes of files (if they are executable and such) and overwrite files that already exists. Which is what we usually want, coz $gamedir may contain custom launch script, game's saves and other stuff, created after initial installation - attempts to remove it completely (in case we are updating already installed game) will wipe these out.
 echo "Successfully moved game files into" $gamedir
 
 #cleaning up temporary files
