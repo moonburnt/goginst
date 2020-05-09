@@ -128,7 +128,6 @@ installation() {
 	gamefiles_move
 	cleanup
 	echo "Done"
-	exit 0
 }
 
 ##Script
@@ -154,9 +153,18 @@ else
 fi
 
 #Checking if our $slug directory contain linux or windows executables and, if yes - proceed accordingly
-#actually, this whole part is dirty as hell. As you can see - most parts repeat themself for linux and windows installations. Sadly, I didnt figure out yet how to do that without copypasted spaghett
-linuxinstallers=($(ls ./$slug/*.sh))
-windowsinstallers=($(ls ./$slug/*.exe))
+shopt -s nullglob #this way we are avoiding inclusion of search command itself into array - so if there are no valid files, it wont trigger false-positive results
+linuxinstallers=(./$slug/*.sh)
+windowsinstallers=(./$slug/*.exe)
+shopt -u nullglob
+
+#removing patch files from valid executables array, since these arent supported anyway
+#there is a problem tho - if there will be any game that contains "patch" in its name - it will be impossible to unpack it. Maybe its better to filter game installers with "setup*" instead?
+for x in "${!windowsinstallers[@]}"; do
+	if [[ ${windowsinstallers[x]} == *patch* ]]; then
+		unset 'windowsinstallers[x]'
+	fi
+	done
 
 #if lengh of array is not 0 - proceed
 if ! [ ${#linuxinstallers[@]} -eq 0 ]; then
@@ -170,5 +178,4 @@ else
 	exit 1
 fi
 
-
-#TODO: add option to ignore patch_ files during installation of windows games
+exit 0
