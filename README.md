@@ -23,7 +23,6 @@ Just throw this script somewhere, edit content of "script's settings" category o
 - Space check and preallocation. Because I have no idea how to implement that without requiring to provide some config file for each update of each game (which kinda goes against the idea of this script, thats designed to be "unified" for everything you download)
 
 **#TODO**:
-- Make windows unpacker ignore patch files (these arent supported anyway)
 - Handle script's settings via standalone configuration file
 - Safety checks to be sure that all dependencies are installed correctly
 - Unpacking multiple games with one command
