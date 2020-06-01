@@ -23,7 +23,8 @@ Just throw this script somewhere, edit content of "script's settings" category o
 - Space check and preallocation. Because I have no idea how to implement that without requiring to provide some config file for each update of each game (which kinda goes against the idea of this script, thats designed to be "unified" for everything you download)
 
 **#TODO**:
-- Handle script's settings via standalone configuration file
-- Safety checks to be sure that all dependencies are installed correctly
+- Safety checks to be sure that dependencies and directories exist
+- Additional safety checks here and there to shutdown script right away if things went wrong
+- Ability to unpack multiple files (for games with DLCs) at once, coz now its borked (at least for gogextract)
 - Unpacking multiple games with one command
-- Make this abomination of script look prettier
+- Code refactoring, coz right now its unreadable mess
