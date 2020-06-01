@@ -1,10 +1,10 @@
 Because I needed something to *just unpack selected games into selected directory*.
 
 **Usage**:
-
-Just throw this script somewhere, edit content of "script's settings" category on the beginning of file according to your needs, then run it like:
-
-`./goginst.sh slug-of-the-game-you-want-to-unpack` (where slug is basically the name of your game's subdirectory, created by gogrepo. E.g, say, for "Death Road to Canada" it will be "death_road_to_canada")
+- Throw this script somewhere
+- Create `config` file inside `$HOME/.config/goginst` directory
+- Write down script's settings according to your setup (you can find list of settings you can freely change in `##Fallback values` category on the very beginning of script)
+- Run script like that: `./goginst.sh slug-of-the-game-you-want-to-unpack` (where slug is basically the name of your game's subdirectory, created by gogrepo. E.g, say, for "Death Road to Canada" it will be "death_road_to_canada")
 
 **Dependencies**:
 - coreutils
@@ -26,3 +26,5 @@ Just throw this script somewhere, edit content of "script's settings" category o
 - Additional safety checks here and there to shutdown script right away if things went wrong
 - Unpacking multiple games with one command
 - Further code improvements
+- Automatically create configfile with default values, in case it doesnt exist (so it will be easier to edit)
+- Built-in help, so I can throw half of "usage" category into the trash bin
