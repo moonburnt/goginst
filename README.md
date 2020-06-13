@@ -10,8 +10,11 @@ Because I needed something to *just unpack selected games into selected director
 - coreutils
 - bash
 - unzip (to unpack .zip files, located inside .sh installers)
+- grep
+
+**Optional Dependencies**:
 - innoextract (to unpack .exe installers)
-- [gogextract](https://github.com/Yepoleb/gogextract) (to unpack .sh installers)
+- [gogextract](https://github.com/Yepoleb/gogextract) (to unpack .sh installers faster)
 - gio (optionally for "gio trash". Can be altered to "rm -f" or whatever you want)
 
 **Notes a.k.a "before you complain"**:
