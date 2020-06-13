@@ -1,4 +1,13 @@
 #!/bin/bash
+
+# Copyright © 2000, moonburnt
+#
+# This program is free software. It comes without any warranty, to
+# the extent permitted by applicable law. You can redistribute it
+# and/or modify it under the terms of the Do What The Fuck You Want
+# To Public License, Version 2, as published by Sam Hocevar.
+# See the LICENSE file for more details.
+
 #wip gog games extractor
 
 ##Global settings
@@ -12,6 +21,9 @@ tempdir="./goginst/temp" #directory where temp files will be located
 extractor="./gogextract.py" #path to gogextract.py
 delfunc="gio trash" #command used to clean temporary files
 
+##Optional dependencies
+inno=true #default = true, if not found on user's system - will be switched to false
+gogext=true #default = true, if not found on user's system - will be switched to false
 
 ##Functions:
 #If directory doesnt exist - shuts whole script down
@@ -22,12 +34,43 @@ dircheck() {
     fi
 }
 
-#If dependency doesnt exist - shuts script down
+#If dependency doesnt exist - returns "false". Which can be caught to either shut script down or change some variable's value
 depcheck() {
     if [ ! $(command -v "$1") ]; then
-        printf "$1 is necessary dependency but cant seem to be found on your system.\nPlease install related package and try again\n"
-        exit 1
+        printf "$1 cant seem to be found on your system.\n"
+        false
     fi
+}
+
+#Extractor used as fallback option if gogextract.py doesnt exist. Receives $1 as input file and $2 as output dir, unpacks data.zip into output dir (coz we dont really need other stuff). Slower than gogextract.py due to dd's limitations
+bashextract() {
+    #maybe I should I safety checks to mkdir? idk
+    mkdir "$2" #coz dd cant create $tempdir/$slug by its own
+    #Checking for first 10kbytes of installer in order to find offset size's variable, then importing it
+    eval "$(dd count=10240 if=$1 bs=1 status=none | grep "head -n" | head -n 1)"
+    #Safety check in case it didnt return the necessary info
+    if [ -z "$offset" ]; then
+        echo "Couldnt find the correct offset, abort"
+        exit 1
+    else
+        echo "Makeself script size: $offset"
+    fi
+
+    #Now lets do the same, but regarding mojosetup archive
+    eval "$(dd count=10240 if=$1 bs=1 status=none | grep "filesizes=" | head -n 1)"
+
+    if [ -z "$filesizes" ]; then
+        echo "Couldnt find size of mojosetup archive, abort"
+        exit 1
+    else
+        echo "MojoSetup archive size: $filesizes"
+    fi
+
+    #With all necessary data gathered, unpacking the data
+    echo "Extracting game files as data.zip (may take a while)"
+    dd skip="$(($offset+$filesizes))" if="$1" of="$2/"data.zip ibs=1 status=none
+
+    echo "Successfully unpacked $1"
 }
 
 #The main installation function. Expects to receive either "sh" or "exe" to decide about unpacking process
@@ -52,8 +95,14 @@ install() {
     if [ "$1" == "sh" ]; then
         #unpacking shells with gogextract
         for workfile in "${shells[@]}"; do
-            echo "Unpacking" $workfile
-            $extractor $workfile $tempdir/$slug
+            echo "Unpacking $workfile"
+            #if gogextract file has been found on its path - using it. Else - using built-in version which is noticably slower
+            if [ "$gogext" == true ]; then
+                $extractor "$workfile" "$tempdir/$slug"
+            else
+                bashextract "$workfile" "$tempdir/$slug"
+            fi
+
             unzip $tempdir/$slug/data.zip data/noarch/* -d $tempdir/$slug
             done
 
@@ -96,44 +145,57 @@ else
 fi
 
 #Checking if provided paths are valid. If no - abort
-dircheck $downloads
-dircheck $gamedir
-dircheck $tempdir
+dircheck "$downloads"
+dircheck "$gamedir"
+dircheck "$tempdir"
 
-#Checking if $extractor exists on its path
+#Checking if $extractor exists on its path. If no - using built-in
 if [ ! -f "$extractor" ]; then
-    echo "$extractor leads nowhere or isnt file, abort"
-    exit 1
+    echo "$extractor leads nowhere or isnt file, using built-in instead"
+    gogext=false
 fi
 
 #There are thousand of possible cleanup functions, so there is no way to check if the particular one exists. Lets just assume that user isnt retarded and move to dependency check
-depcheck "unzip"
-depcheck "innoextract"
+#If depcheck has returned false (which happens only in case dependency doesnt exist on your system) - shut script down
+depcheck "unzip" || exit 1
+depcheck "grep" || exit 1
+#Since its optional dependency - if no innoextract has been found on user's system - set inno to false
+depcheck "innoextract" || inno=false
 
 #Once all necessary checks are done, printing the values that will be used by script. Using printf coz echo is janky when it comes to printing multiple lines at once
 printf "Running $scriptname with following settings:
  - Downloaded games directory: $downloads
  - Installed games directory: $gamedir
  - Temporary files directory: $tempdir
- - Path to gogextract: $extractor
  - Cleanup function: $delfunc \n"
+
+if [ "$gogext" = false ]; then
+    printf " - Shell extractor: built-in\n"
+else
+    printf " - Shell extractor: $extractor\n"
+fi
+
+if [ "$inno" = false ]; then
+    printf " - Innoextract support: disabled\n"
+else
+    printf " - Innoextract support: enabled\n"
+fi
 
 #Checking launch arguments. If none - printing info regarding usage and abort.
 if [ -z "$1" ]; then
-    echo "Input is empty. Usage:" $scriptname "game-to-unpack"
+    echo "Input is empty. Usage: $scriptname game-to-unpack"
     exit 1
 else
     slug="$1"
-    echo "Unpacking the game:" $slug
+    echo "Unpacking the game: $slug"
 fi
 
 #Entering $downloads directory
-cd $downloads
+cd "$downloads"
 
 #Checking if directory named $slug exists in $downloads, which usually means that gogrepo has already downloaded such game
-if [ -d $slug ]; then
-    echo "Found game with slug" $slug", proceed"
-#    cd ./$slug
+if [ -d "$slug" ]; then
+    echo "Found game with slug $slug, proceed"
 else
     echo "Couldnt find such game, abort"
     exit 1
@@ -156,9 +218,11 @@ for x in "${!exes[@]}"; do
 if ! [ ${#shells[@]} -eq 0 ]; then
     echo "Found native shell installers, proceed"
     install "sh"
-elif ! [ ${#exes[@]} -eq 0 ]; then
-    echo "Found exe installers, proceed"
-    install "exe"
+elif [ "$inno" = true ]; then
+    if ! [ ${#exes[@]} -eq 0 ]; then
+        echo "Found exe installers, proceed"
+        install exe
+    fi
 else
     echo "No valid files has been found, abort"
     exit 1
