@@ -12,6 +12,7 @@
 
 ##Global settings
 scriptname=`basename "$0"`
+scriptversion="0.7"
 
 configpath="$HOME/.config/goginst"
 configname="config"
@@ -22,6 +23,7 @@ delfunc="gio trash" #Command used to clean up temporary files
 inno=true
 gogext=true
 interactive=true
+silent=true
 
 ##Functions:
 #If directory doesnt exist - shuts whole script down
@@ -111,7 +113,8 @@ extractor=\"$extractor\" #Path to gogextract.py, which is used to speed up unpac
 ##Optional dependencies
 inno=true #Determines if you want to unpack windows games. Default = true, if innoextract isnt found on your system - will be switched to false
 gogext=true #Determines if you want to use gogextract.py, or rely on built-in version. Default = true, if gogextract.py isnt found on path provided via $extractor - will be switched to false
-interactive=true #Determines if you want to enable some options that require user to confirm certain actions. Default = true, may be usefull to switch to false if you want goginst to perform as part of automated cronjob or something like that" > "$1/$2"
+interactive=true #Determines if you want to enable some options that require user to confirm certain actions. Default = true, may be usefull to switch to false if you want goginst to perform as part of automated cronjob or something like that
+silent=true #Determines if you want to see full output of unpacking scripts" > "$1/$2"
     fi
 }
 
@@ -171,24 +174,40 @@ install() {
             echo "Unpacking $workfile"
             #if gogextract file has been found on its path - using it. Else - using built-in version which is noticably slower
             if [ "$gogext" == true ]; then
-                "$extractor" "$workfile" "$tempdir/$slug"
+                if [ "$silent" == true ]; then
+                    "$extractor" "$workfile" "$tempdir/$slug" >/dev/null
+                else
+                    "$extractor" "$workfile" "$tempdir/$slug"
+                fi
             else
-                bashextract "$workfile" "$tempdir/$slug"
+                if [ "$silent" == true ]; then
+                    bashextract "$workfile" "$tempdir/$slug" >/dev/null
+                else
+                    "$extractor" "$workfile" "$tempdir/$slug"
+                fi
             fi
 
-            unzip "$tempdir"/"$slug"/data.zip data/noarch/* -d "$tempdir"/"$slug"
+            if [ "$silent" == true ]; then
+                unzip "$tempdir"/"$slug"/data.zip data/noarch/* -d "$tempdir"/"$slug" >/dev/null
+            else
+                unzip "$tempdir"/"$slug"/data.zip data/noarch/* -d "$tempdir"/"$slug"
+            fi
             done
 
         #moving unpacked native game into $gamedir/$slug
         echo "Moving game files into $gamedir/$slug directory"
-        cp -a "$tempdir"/"$slug"/data/noarch/* "$gamedir"/"$slug" #This way (unlike with "mv") it will preserve attributes of files (if they are executable and such) and overwrite files that already exists. Which is what we usually want, coz $gamedir/$slug may contain custom launch script, game's saves and other stuff, created after initial installation - attempts to remove it completely (in case we are updating already installed game) will wipe these out.
+        cp -a "$tempdir"/"$slug"/data/noarch/* "$gamedir"/"$slug" #Will try to replace it with mv next update
         echo "Successfully moved game files into $gamedir/$slug"
 
     elif [ "$1" == "exe" ]; then
         #unpacking exes with innoextract
         for workfile in "${exes[@]}"; do
             echo "Unpacking $workfile"
-            innoextract "$workfile" -d "$tempdir"/"$slug"
+            if [ "$silent" == true ]; then
+                innoextract "$workfile" -d "$tempdir"/"$slug" >/dev/null
+            else
+                innoextract "$workfile" -d "$tempdir"/"$slug"
+            fi
             done
 
         #moving unpacked wine game into $gamedir/$slug
@@ -207,6 +226,15 @@ install() {
 
 
 ##Script
+#Checking os version. If not linux - echoing warning about unsupported system
+echo "Running $scriptname version $scriptversion"
+
+if [[ "$OSTYPE" == "linux-gnu" ]]; then
+    true
+else
+    echo "Your OS isnt officially supported. Proceed with caution!"
+fi
+
 #Looking for configfile and importing stats from it. If doesnt exist - creating the one with default stats
 echo "Looking for configuration file in $configpath"
 configmaker "$configpath" "$configname"
@@ -221,11 +249,9 @@ dircheck "$tempdir"
 
 #Checking if $extractor exists on its path. If no - using built-in
 if [ ! -f "$extractor" ]; then
-    echo "$extractor leads nowhere or isnt file, using built-in instead"
+    printf '$extractor leads nowhere or isnt file, using built-in instead\n'
     gogext=false
 fi
-
-#There are thousand of possible cleanup functions, so there is no way to check if the particular one exists. Lets just assume that user isnt retarded and move to dependency check
 
 #If depcheck has returned false (which happens only in case dependency doesnt exist on your system) - shut script down
 depcheck "unzip" || exit 1
@@ -233,12 +259,14 @@ depcheck "grep" || exit 1
 #Since its optional dependency - if no innoextract has been found on user's system - set inno to false
 depcheck "innoextract" || inno=false
 
+#temporary, will be removed after testing
+depcheck "gio" || exit 1
+
 #Once all necessary checks are done, printing the values that will be used by script. Using printf coz echo is janky when it comes to printing multiple lines at once
 printf "Running $scriptname with following settings:
  - Downloaded games directory: $downloads
  - Installed games directory: $gamedir
- - Temporary files directory: $tempdir
- - Cleanup function: $delfunc \n"
+ - Temporary files directory: $tempdir\n"
 
 if [ "$gogext" == true ]; then
     printf " - Shell extractor: $extractor\n"
@@ -250,19 +278,20 @@ fi
 
 optcheck "$inno" "Innoextract support"
 optcheck "$interactive" "Interactive mode"
+optcheck "$silent" "Silent mode"
 
 #Entering $downloads directory
 cd "$downloads"
 
 #Checking launch arguments. If none - printing info regarding usage and abort.
-if [ -z "$1" ]; then
+if [ "$#" == 0 ]; then
     echo "Input is empty. Usage: $scriptname game-to-unpack"
     exit 1
 fi
 
 #Trying to guess slug based on input. If there are no matching dirs - shutdown with error, if there is a match but its not dir - shutdown with error, if there are multiple results - depending on state of interactive mode, either shutdown or ask to specify one
 shopt -s nullglob
-search=(*"$1"*)
+search=("$@")
 shopt -u nullglob
 
 for x in "${!search[@]}"; do
