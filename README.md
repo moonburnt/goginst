@@ -15,6 +15,7 @@ Because I needed something to *just unpack selected games into selected director
 **Optional Dependencies**:
 - innoextract (to unpack .exe installers)
 - [gogextract](https://github.com/Yepoleb/gogextract) (to unpack .sh installers faster)
+- jq (to create XDG-compatible menu entries for wine games)
 
 **Limitations a.k.a "before you complain"**:
 - During its work, script **uses disk space equal to up to x3 of game's size**. That happens because it first needs to get zip archive from gog-provided installer, then unpack it, and only then move received game files into their destination directory. Im looking for a way to reduce it a bit, probably with next update.
