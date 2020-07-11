@@ -12,10 +12,12 @@
 
 ##Global settings
 scriptname=`basename "$0"`
-scriptversion="0.8"
+scriptversion="0.9"
 
 configpath="$HOME/.config/goginst"
 configname="config"
+
+tempdir="$HOME/.cache/goginst/temp/"
 
 delfunc="gio trash" #Command used to clean up temporary files
 
@@ -25,6 +27,7 @@ gogext=true
 interactive=true
 silent=true
 menumaker=true
+unpackextras=true
 
 ##Functions:
 #returns false if $1 isnt directory or doesnt exist
@@ -81,6 +84,7 @@ menu_maker() {
         local gameicon="$1/support/icon.png"
         local game="$1/start.sh"
         local gamelauncher="$game"
+        local gamecomment="Native game, installed with $scriptname"
     elif [ "$2" == "wine" ]; then
         dep_check "jq" || return 1
 
@@ -89,10 +93,15 @@ menu_maker() {
         local gameicon="$(echo $1/goggame*.ico)"
         local game="$1/$(jq -r '.playTasks | .[] | .path' $1/goggame*.info)"
         local gamelauncher="wine $game"
+        local gamecomment="Wine game, installed with $scriptname"
     else
         return 1
     fi
-    local iconpath="$HOME/.local/share/applications"
+
+    #checking if we have custom iconpath being set. If not - using default one instead
+    if [ -z "$iconpath" ]; then
+        local iconpath="$HOME/.local/share/applications"
+    fi
 
     file_check "$gameinfo" || return 1
     file_check "$gameicon" || return 1
@@ -112,11 +121,12 @@ Type=Application
 Version=1.0
 Name=$gamename
 GenericName=$slug
+Comment=$gamecomment
 Icon=$gameicon
 Exec=$gamelauncher
 Terminal=false
 Categories=Game;ActionGame;
-Comment=" > "$iconpath/$slug-goginst.desktop"
+" > "$iconpath/$slug-goginst.desktop"
 }
 
 #Creates configfile with default settings. Expects to receive two arguments - $1 for config path and $2 for configfile name
@@ -126,18 +136,7 @@ config_maker() {
         exit 1
     fi
 
-    #At first - lets determine if config dir exists. If exists but not dir - abort to avoid data loss. If exists - proceed, if doesnt exist - creating
-    if [ -f "$1" ] || [ -L "$1" ]; then
-        echo "$1 exists but isnt directory, abort" >&2
-        exit 1
-    elif [ -d "$1" ]; then
-        echo "Found config directory, proceed"
-    else
-        echo "Config directory doesnt exist, creating"
-        mkdir -p "$1" || exit 1
-    fi
-
-    #Now lets check if configfile exists and is file
+    #Lets check if configfile exists and is file
     if [ -d "$1/$2" ] || [ -L "$1/$2" ]; then
         echo "$1/$2 exists but isnt file, abort" >&2
         exit 1
@@ -149,30 +148,31 @@ config_maker() {
         if [ "$interactive" = true ]; then
             printf "Enter the path to your directory with gogrepo-downloaded games:\n"
             read downloads
-            printf "Enter the path to directory that you would like to install games into:\n"
+            printf "Enter the path to directory that will be used to store installed games:\n"
             read gamedir
-            printf "Enter the path to directory that will be used to store temporary files:\n"
-            read tempdir
-            printf "Enter the path to gogextract.py, in case you have it and want to speed up unpacking of native linux games:\n"
+            printf "Enter the path to directory that will be used to store unpacked extras:\n"
+            read extrasdir
+            printf "Enter the path to gogextract.py, in case you have it and want to speed up unpacking of native linux games:\n(leave blank, if you dont have it - will use built-in extractor instead)\n"
             read extractor
 
             echo "Writing values into file"
         else
             downloads="$HOME/Downloads/gogrepo/"
             gamedir="$HOME/.local/share/games/gog/"
-            tempdir="$HOME/.cache/goginst/temp/"
+            extrasdir="$HOME/.local/share/games/gog/goodies/"
             extractor="$HOME/gogextract.py"
         fi
 
         printf "#This is a settings file for goginst.sh. Change values of variables below according to your setup. General bash rules apply
 downloads=\"$downloads\" #Path to directory with gogrepo-downloaded games
 gamedir=\"$gamedir\" #Path to directory that will contain your installed games
-tempdir=\"$tempdir\" #Path to directory with temporary files
+extrasdir=\"$extrasdir\" #Path to directory that will contain extras, shipped with games (OSTs and so on)
 extractor=\"$extractor\" #Path to gogextract.py, which is used to speed up unpacking on native linux games
 
 ##Optional dependencies
 inno=true #Determines if you want to unpack windows games. Default = true, if innoextract isnt found on your system - will be switched to false
 gogext=true #Determines if you want to use gogextract.py, or rely on built-in version. Default = true, if gogextract.py isnt found on path provided via $extractor - will be switched to false
+unpackextras=true #Determines if you want to unpack extras, shipped with games as additional .zip files. Default = true, will be forced to false if $extrasdir isnt valid
 interactive=true #Determines if you want to enable some options that require user to confirm certain actions. Default = true, may be usefull to switch to false if you want goginst to perform as part of automated cronjob or something like that
 silent=true #Determines if you want to see full output of unpacking scripts. Default = true
 menumaker=true #Determines if you want to create XDG menu entries for games you've installed. Default = true" > "$1/$2"
@@ -291,6 +291,17 @@ install() {
         exit 1
     fi
 
+    if [ "$unpackextras" == true ]; then
+        echo "Unpacking game's extras into $extrasdir/$slug"
+        for x in "${!zips[@]}"; do
+            if [ "$silent" == true ]; then
+                unzip -o "${zips[x]}" -d "$extrasdir"/"$slug"/ >/dev/null
+            else
+                unzip -o "${zips[x]}" -d "$extrasdir"/"$slug"/
+            fi
+        done
+    fi
+
     echo "Cleaning up temporary files"
     $delfunc "$tempdir"/"$slug"
 }
@@ -308,15 +319,17 @@ fi
 
 #Looking for configfile and importing stats from it. If doesnt exist - creating the one with default stats
 echo "Looking for configuration file in $configpath"
+mkdir -p "$configpath" || exit 1 #recursively create config directory. Since it will return error if there is a file on its path - we dont need to call for dir_check manually
 config_maker "$configpath" "$configname"
 
 echo "Importing settings"
 source "$configpath/$configname"
 
-#Checking if provided paths are valid. If no - abort
+#Checking if provided paths are valid
 dir_check "$downloads" || exit 1
 dir_check "$gamedir" || exit 1
-dir_check "$tempdir" || exit 1
+dir_check "$extrasdir" || unpackextras=false
+mkdir -p "$tempdir" || exit 1 #same as with configpath above
 
 #Checking if $extractor exists on its path. If no - using built-in
 if [ ! -f "$extractor" ]; then
@@ -341,14 +354,23 @@ printf "Running $scriptname with following settings:
  - XDG menu entry creation: $menumaker\n"
 
 if [ "$gogext" == true ]; then
-    printf " - Shell extractor: $extractor\n"
+    printf " - Native games extractor: $extractor\n"
 elif [ "$gogext" == false ]; then
-    printf " - Shell extractor: built-in\n"
+    printf " - Native games extractor: built-in\n"
 else
     exit 1
 fi
 
 opt_check "$inno" "Innoextract support"
+
+if [ "$unpackextras" == true ]; then
+    printf " - Unpacked goodies directory: $extrasdir\n"
+elif [ "$unpackextras" == false ]; then
+    printf " - Goodies unpacker: disabled\n"
+else
+    exit 1
+fi
+
 opt_check "$interactive" "Interactive mode"
 opt_check "$silent" "Silent mode"
 
@@ -400,7 +422,13 @@ echo "Found game with slug $slug, proceed"
 shopt -s nullglob #this way we are avoiding inclusion of search command itself into array - so if there are no valid files, it wont trigger false-positive results
 shells=(./"$slug"/*.sh) #removed check for slugs, coz some games (like dont starve) have installer names that dont match game's slug
 exes=(./"$slug"/*.exe)
+zips=(./"$slug"/*.zip) #extras
 shopt -u nullglob #unchecking after creation of arrays to avoid unwanted behavior of other commands
+
+#if no zips - set goodies unpacker to false
+if [ "${#zips[@]}" == 0 ]; then
+    unpackextras = false
+fi
 
 #removing patch files from valid executables array, since these arent supported anyway
 for x in "${!exes[@]}"; do
