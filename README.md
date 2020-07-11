@@ -2,7 +2,7 @@
 
 **Features**:
 - **Fast and easy installation of all gogrepo-downloaded games**. Say, in order to install ftl you will need to just type `./goginst.sh faster*` and thats about it
-- Optional creation of **XDG-compatible menu entries**, so you will be able to run your game right away from your favorite menu launcher, will it be wisker, gnome-menu or whatever - as if it was installed from repo
+- Optional creation of **XDG-compatible menu entries**, so you will be able to run your games right away from your favorite menu launcher, will it be whisker, gnome-menu or whatever - as if they were installed from repo
 - **Goodies unpacker**. Will they be OSTs or wallpapers - for as long as you want it, they will be automatically unpacked into selected game-specific directory. No need to manually call for archive manager anymore!
 - **Interactive search**. Too lazy to type in whole game's name? Dont worry, asterisks and other expressions are supported. If there are multiple games matching your input - you will be asked to pick the one, you trully wanted
 - **Highly configurable with a single file**. Everything you want can be configured with one single file. Wanna change directory used to store installed games? Disable generation of menu entries? Or turn off interactive mode completely, to use script as part of daily automated update system in cron? No problems, just edit damn configuration file and thats about it! No messing with command line options required! (just dont type in anything stupid)
