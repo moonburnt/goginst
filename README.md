@@ -21,7 +21,7 @@
 
 **Optional Dependencies**:
 - innoextract (to unpack .exe installers)
-- [gogextract](https://github.com/Yepoleb/gogextract) (to unpack .sh installers faster)
+- [gogextract](https://github.com/Yepoleb/gogextract) (to speed up the unpacking of native linux installers)
 - jq (to create XDG-compatible menu entries for wine games)
 
 **Limitations a.k.a "before you complain"**:
