@@ -12,7 +12,7 @@
 
 ##Global settings
 scriptname=`basename "$0"`
-scriptversion="0.9"
+scriptversion="0.9.1"
 
 configpath="$HOME/.config/goginst"
 configname="config"
@@ -54,11 +54,21 @@ dep_check() {
     fi
 }
 
+#function that prints error message (either passed as argument or default one) and exits script
+error_and_exit() {
+    if [ "$1" ]; then
+        local error_message="$1"
+    else
+        local error_message="An unexpected error has happend"
+    fi
+    echo "$error_message" >&2
+    exit 1
+}
+
 #checks if $1 equal "true" or "false". If yes - prints $2 as message and $1 as variable's state, else - shuts script down with error
 opt_check() {
     if [ -z "$2" ]; then
-        echo "You're doing it wrong!"
-        exit 1
+        error_and_exit
     fi
 
     if [ "$1" == true ]; then
@@ -66,8 +76,7 @@ opt_check() {
     elif [ "$1" == false ]; then
         printf " - $2: disabled\n"
     else
-        printf "Detected invalid configuration! Please edit or delete re-generate your config file and try again\n" >&2
-        exit 1
+        error_and_exit "Detected invalid configuration! Please edit or delete re-generate your config file and try again"
     fi
 }
 
@@ -129,41 +138,28 @@ Categories=Game;ActionGame;
 " > "$iconpath/$slug-goginst.desktop"
 }
 
-#Creates configfile with default settings. Expects to receive two arguments - $1 for config path and $2 for configfile name
+#Creates configfile - either with default settings (if interactive mode disabled), or with user-provided (if enabled)
 config_maker() {
-    if [ -z "$1" ] || [ -z "$2" ]; then
-        echo "Thats not how this function works, retard" >&2
-        exit 1
+    echo "Creating $configname in $configpath"
+    if [ "$interactive" = true ]; then
+        printf "Enter the path to your directory with gogrepo-downloaded games:\n"
+        read downloads
+        printf "Enter the path to directory that will be used to store installed games:\n"
+        read gamedir
+        printf "Enter the path to directory that will be used to store unpacked extras:\n"
+        read extrasdir
+        printf "Enter the path to gogextract.py, in case you have it and want to speed up unpacking of native linux games:\n(leave blank, if you dont have it - will use built-in extractor instead)\n"
+        read extractor
+
+        echo "Writing values into file"
+    else
+        downloads="$HOME/Downloads/gogrepo/"
+        gamedir="$HOME/.local/share/games/gog/"
+        extrasdir="$HOME/.local/share/games/gog/goodies/"
+        extractor="$HOME/gogextract.py"
     fi
 
-    #Lets check if configfile exists and is file
-    if [ -d "$1/$2" ] || [ -L "$1/$2" ]; then
-        echo "$1/$2 exists but isnt file, abort" >&2
-        exit 1
-    elif [ -f "$1/$2" ]; then
-        echo "Found $1/$2, proceed"
-    else
-        echo "Creating $2"
-        #there goes configfile creation. Every new user-configurable variable should be added to this list
-        if [ "$interactive" = true ]; then
-            printf "Enter the path to your directory with gogrepo-downloaded games:\n"
-            read downloads
-            printf "Enter the path to directory that will be used to store installed games:\n"
-            read gamedir
-            printf "Enter the path to directory that will be used to store unpacked extras:\n"
-            read extrasdir
-            printf "Enter the path to gogextract.py, in case you have it and want to speed up unpacking of native linux games:\n(leave blank, if you dont have it - will use built-in extractor instead)\n"
-            read extractor
-
-            echo "Writing values into file"
-        else
-            downloads="$HOME/Downloads/gogrepo/"
-            gamedir="$HOME/.local/share/games/gog/"
-            extrasdir="$HOME/.local/share/games/gog/goodies/"
-            extractor="$HOME/gogextract.py"
-        fi
-
-        printf "#This is a settings file for goginst.sh. Change values of variables below according to your setup. General bash rules apply
+    printf "#This is a settings file for goginst.sh. Change values of variables below according to your setup. General bash rules apply
 downloads=\"$downloads\" #Path to directory with gogrepo-downloaded games
 gamedir=\"$gamedir\" #Path to directory that will contain your installed games
 extrasdir=\"$extrasdir\" #Path to directory that will contain extras, shipped with games (OSTs and so on)
@@ -175,9 +171,14 @@ gogext=true #Determines if you want to use gogextract.py, or rely on built-in ve
 unpackextras=true #Determines if you want to unpack extras, shipped with games as additional .zip files. Default = true, will be forced to false if $extrasdir isnt valid
 interactive=true #Determines if you want to enable some options that require user to confirm certain actions. Default = true, may be usefull to switch to false if you want goginst to perform as part of automated cronjob or something like that
 silent=true #Determines if you want to see full output of unpacking scripts. Default = true
-menumaker=true #Determines if you want to create XDG menu entries for games you've installed. Default = true" > "$1/$2"
-    fi
+menumaker=true #Determines if you want to create XDG menu entries for games you've installed. Default = true" > "$configpath/$configname"
 }
+
+
+
+
+
+
 
 #Extractor used as fallback option if gogextract.py doesnt exist. Receives $1 as input file and $2 as output dir, unpacks data.zip into output dir (coz we dont really need other stuff). Slower than gogextract.py due to dd's limitations
 bash_extract() {
@@ -187,8 +188,7 @@ bash_extract() {
     eval "$(dd count=10240 if=$1 bs=1 status=none | grep "head -n" | head -n 1)"
     #Safety check in case it didnt return the necessary info
     if [ -z "$offset" ]; then
-        echo "Couldnt find the correct offset, abort" >&2
-        exit 1
+        error_and_exit "Couldnt find the correct offset, abort"
     else
         echo "Makeself script size: $offset"
     fi
@@ -197,8 +197,7 @@ bash_extract() {
     eval "$(dd count=10240 if=$1 bs=1 status=none | grep "filesizes=" | head -n 1)"
 
     if [ -z "$filesizes" ]; then
-        echo "Couldnt find size of mojosetup archive, abort" >&2
-        exit 1
+        error_and_exit "Couldnt find size of mojosetup archive, abort"
     else
         echo "MojoSetup archive size: $filesizes"
     fi
@@ -221,8 +220,7 @@ install() {
 
     #Checking if game's final destination exists and is directory
     if [ -f "$gamedir/$slug" ] || [ -L "$gamedir/$slug" ]; then
-        echo "Unable to install the game - $gamedir/$slug exists but isnt directory. Please remove/rename it and try again"
-        exit 1
+        error_and_exit "Unable to install the game - $gamedir/$slug exists but isnt directory. Please remove/rename it and try again"
     elif [ ! -d "$gamedir/$slug" ]; then
         echo "Didnt find $gamedir/$slug, creating"
         mkdir "$gamedir/$slug"
@@ -236,28 +234,28 @@ install() {
             #if gogextract file has been found on its path - using it. Else - using built-in version which is noticably slower
             if [ "$gogext" == true ]; then
                 if [ "$silent" == true ]; then
-                    "$extractor" "$workfile" "$tempdir/$slug" >/dev/null || exit 1
+                    "$extractor" "$workfile" "$tempdir/$slug" >/dev/null || error_and_exit
                 else
-                    "$extractor" "$workfile" "$tempdir/$slug" || exit 1
+                    "$extractor" "$workfile" "$tempdir/$slug" || error_and_exit
                 fi
             else
                 if [ "$silent" == true ]; then
-                    bash_extract "$workfile" "$tempdir/$slug" >/dev/null || exit 1
+                    bash_extract "$workfile" "$tempdir/$slug" >/dev/null || error_and_exit
                 else
-                    "$extractor" "$workfile" "$tempdir/$slug" || exit 1
+                    "$extractor" "$workfile" "$tempdir/$slug" || error_and_exit
                 fi
             fi
 
             if [ "$silent" == true ]; then
-                unzip "$tempdir"/"$slug"/data.zip data/noarch/* -d "$tempdir"/"$slug" >/dev/null || exit 1
+                unzip "$tempdir"/"$slug"/data.zip data/noarch/* -d "$tempdir"/"$slug" >/dev/null || error_and_exit
             else
-                unzip "$tempdir"/"$slug"/data.zip data/noarch/* -d "$tempdir"/"$slug" || exit 1
+                unzip "$tempdir"/"$slug"/data.zip data/noarch/* -d "$tempdir"/"$slug" || error_and_exit
             fi
             done
 
         #moving unpacked native game into $gamedir/$slug
         echo "Moving game files into $gamedir/$slug directory"
-        cp -a "$tempdir"/"$slug"/data/noarch/* "$gamedir"/"$slug" || exit 1
+        cp -a "$tempdir"/"$slug"/data/noarch/* "$gamedir"/"$slug" || error_and_exit
         echo "Successfully moved game files into $gamedir/$slug"
 
         #creating menu file for game
@@ -270,15 +268,15 @@ install() {
         for workfile in "${exes[@]}"; do
             echo "Unpacking $workfile"
             if [ "$silent" == true ]; then
-                innoextract "$workfile" -d "$tempdir"/"$slug" >/dev/null || exit 1
+                innoextract "$workfile" -d "$tempdir"/"$slug" >/dev/null || error_and_exit
             else
-                innoextract "$workfile" -d "$tempdir"/"$slug" || exit 1
+                innoextract "$workfile" -d "$tempdir"/"$slug" || error_and_exit
             fi
             done
 
         #moving unpacked wine game into $gamedir/$slug
         echo "Moving game files into $gamedir/$slug directory"
-        cp -a "$tempdir"/"$slug"/app/* "$gamedir"/"$slug" || exit 1
+        cp -a "$tempdir"/"$slug"/app/* "$gamedir"/"$slug" || error_and_exit
         echo "Successfully moved game files into $gamedir/$slug"
 
         #creating menu file for game
@@ -287,8 +285,7 @@ install() {
         fi
 
     else
-        echo "Thats not how this function works, degenerate"
-        exit 1
+        error_and_exit "Thats not how this function works, degenerate"
     fi
 
     if [ "$unpackextras" == true ]; then
@@ -319,17 +316,22 @@ fi
 
 #Looking for configfile and importing stats from it. If doesnt exist - creating the one with default stats
 echo "Looking for configuration file in $configpath"
-mkdir -p "$configpath" || exit 1 #recursively create config directory. Since it will return error if there is a file on its path - we dont need to call for dir_check manually
-config_maker "$configpath" "$configname"
+mkdir -p "$configpath" || error_and_exit #recursively create config directory. Since it will return error if there is a file on its path - we dont need to call for dir_check manually
+
+if [ -d "$configpath/$configname" ] || [ -L "configpath/$configname" ]; then
+    error_and_exit "configpath/$configname exists but isnt file, abort"
+fi
+
+file_check "$configpath/$configname" || config_maker
 
 echo "Importing settings"
 source "$configpath/$configname"
 
 #Checking if provided paths are valid
-dir_check "$downloads" || exit 1
-dir_check "$gamedir" || exit 1
+dir_check "$downloads" || error_and_exit
+dir_check "$gamedir" || error_and_exit
 dir_check "$extrasdir" || unpackextras=false
-mkdir -p "$tempdir" || exit 1 #same as with configpath above
+mkdir -p "$tempdir" || error_and_exit #same as with configpath above
 
 #Checking if $extractor exists on its path. If no - using built-in
 if [ ! -f "$extractor" ]; then
@@ -338,13 +340,13 @@ if [ ! -f "$extractor" ]; then
 fi
 
 #If dep_check has returned false (which happens only in case dependency doesnt exist on your system) - shut script down
-dep_check "unzip" || exit 1
-dep_check "grep" || exit 1
+dep_check "unzip" || error_and_exit
+dep_check "grep" || error_and_exit
 #Since its optional dependency - if no innoextract has been found on user's system - set inno to false
 dep_check "innoextract" || inno=false
 
 #temporary, will be removed after testing
-dep_check "gio" || exit 1
+dep_check "gio" || error_and_exit
 
 #Once all necessary checks are done, printing the values that will be used by script. Using printf coz echo is janky when it comes to printing multiple lines at once
 printf "Running $scriptname with following settings:
@@ -358,7 +360,7 @@ if [ "$gogext" == true ]; then
 elif [ "$gogext" == false ]; then
     printf " - Native games extractor: built-in\n"
 else
-    exit 1
+    error_and_exit
 fi
 
 opt_check "$inno" "Innoextract support"
@@ -368,7 +370,7 @@ if [ "$unpackextras" == true ]; then
 elif [ "$unpackextras" == false ]; then
     printf " - Goodies unpacker: disabled\n"
 else
-    exit 1
+    error_and_exit
 fi
 
 opt_check "$interactive" "Interactive mode"
@@ -380,7 +382,7 @@ cd "$downloads"
 #Checking launch arguments. If none - printing info regarding usage and abort.
 if [ "$#" == 0 ]; then
     echo "Input is empty. Usage: $scriptname game-to-unpack"
-    exit 1
+    exit 0
 fi
 
 #Trying to guess slug based on input. If there are no matching dirs - shutdown with error, if there is a match but its not dir - shutdown with error, if there are multiple results - depending on state of interactive mode, either shutdown or ask to specify one
@@ -395,16 +397,14 @@ for x in "${!search[@]}"; do
     done
 
 if [ "${#search[@]}" == 0 ]; then
-    echo "Couldnt find any games matching your input, abort"
-    exit 1
+    error_and_exit "Couldnt find any games matching your input, abort"
 elif [ "${#search[@]}" == 1 ]; then
-    dir_check "${search[@]}" || exit 1
+    dir_check "${search[@]}" || error_and_exit
     slug="${search[@]}"
 else
     if [ "$interactive" == false ]; then
         echo "Got multiple results. Please try again with something more accurate."
-        echo "Current search returned: ${search[@]}"
-        exit 1
+        error_and_exit "Current search returned: ${search[@]}"
     else
         echo "Got multiple results. Please select the correct one:"
         select choice in "${search[@]}"; do
@@ -427,7 +427,7 @@ shopt -u nullglob #unchecking after creation of arrays to avoid unwanted behavio
 
 #if no zips - set goodies unpacker to false
 if [ "${#zips[@]}" == 0 ]; then
-    unpackextras = false
+    unpackextras=false
 fi
 
 #removing patch files from valid executables array, since these arent supported anyway
@@ -446,12 +446,10 @@ elif [ "$inno" = true ]; then
         echo "Found exe installers, proceed"
         install "exe"
     else
-        echo "No valid files has been found, abort"
-        exit 1
+        error_and_exit "No valid files has been found, abort"
     fi
 else
-    echo "No valid files has been found, abort"
-    exit 1
+    error_and_exit "No valid files has been found, abort"
 fi
 
 echo "Done"
