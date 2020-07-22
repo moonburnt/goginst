@@ -20,7 +20,7 @@ Feeling lost? Try to run it with -help flag:
 **Dependencies**:
 - coreutils
 - bash
-- unzip (to unpack .zip files, located inside .sh installers)
+- unzip
 - grep
 - gvfs/gio (for gio trash, will be removed once I will be sure that this script is stable enough)
 
